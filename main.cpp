@@ -1,8 +1,17 @@
 #include "mbed.h"
 #include "EthernetInterface.h"
+#include "lpc_phy.h"
 
 #define BUFSIZE 140
 #define SERVER_PORT 6791
+
+#define DP8_SPEED10MBPS    (1 << 1)   /**< 1=10MBps speed */
+#define DP8_VALID_LINK     (1 << 0)   /**< 1=Link active */
+
+bool get_eth_link_status(void)
+{
+    return (lpc_mii_read_data() & DP8_VALID_LINK) ? true : false;
+}
 
 // MBED Leds
 DigitalOut led1(LED1);
@@ -25,23 +34,23 @@ int main(void)
 {
     char buf[BUFSIZE];
     int s;
-    Ethernet *cable = new Ethernet;
-    float temp;
+    //float temp;
 
     S1_C1 = 0;
     S1_C2 = 0;
     S2_C1 = 0;
     S2_C2 = 0;
-    
+
 
     // Ethernet initialization
 
-    //EthernetInterface eth;
-    static const char* mbedIp       = "10.0.18.119" ;  //IP
-    static const char* mbedMask     = "255.255.255.0";  // Mask
-    static const char* mbedGateway  = "10.0.18.1";    //Gateway
-    EthernetInterface::init(mbedIp,mbedMask,mbedGateway); //Use  these parameters for static IP
-    //EthernetInterface::init(); //Use DHCP
+#if defined(ETH_DHCP)
+    EthernetInterface::init(); //Use DHCP
+#else
+#if defined(ETH_FIXIP)
+    EthernetInterface::init(ETH_IP,ETH_MASK,ETH_GATEWAY); //Use  these parameters for static IP
+#endif
+#endif
 
     TCPSocketConnection client;
     TCPSocketServer server;
@@ -92,10 +101,6 @@ int main(void)
             else if (buf[0] == ':' && buf[1] == 'S' && buf[2] == 'C' && buf[3] == '2' && buf[4] == '2' && buf[5] == '!')
                 {S2_C1 = 0; S2_C2 = 1; led3=0; led4=1;}
 
-
-             
-
- 
             /*
             printf("\nMsg enviada de %d bytes: ",s);
             for (int i = 0; i < s; i++)
@@ -112,7 +117,7 @@ int main(void)
         //printf("\nDisconnected: %d\n",eth.disconnect());
         client.close();
         server.close();
-        if (!cable->link()) {
+        if (!get_eth_link_status()) {
             EthernetInterface::disconnect();
             printf("\n Trying to establish connection...\n");
             while (EthernetInterface::connect(5000)) {
